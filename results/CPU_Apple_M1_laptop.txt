@@ -1,0 +1,14 @@
+============================================================
+Command:          /Users/cyrus/Documents/Codex/2026-05-06/run-this-benchmark-https-github-com/ov-genai-speed-test/ov_asr_speed.py -m hlevring/ov-whisper_small-int8-2026.0.0 --audio demoB108s.wav -d cpu
+Platform:         macOS-15.7.4-arm64-arm-64bit-Mach-O
+Device:           CPU (Apple M1)
+Model:            hlevring/ov-whisper_small-int8-2026.0.0
+Audio:            demoB108s.wav (108.6s)
+
+Load+compile:         4555 ms
+Inference:            8762 ms  (12.4x realtime)
+Total:               13317 ms
+
+Transcript (first 200 chars):
+  "Intel is revolutionising the computing landscape with AI built into the new generations of PCs. These AI PCs are designed to supercharge speed, efficiency, privacy and security, making AI accessible t…"
+============================================================
