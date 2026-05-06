@@ -41,8 +41,16 @@ pip install -r requirements.txt
 
 Make sure the virtual environment is activated, then run the benchmark:
 
+Whisper Small Int8:
+
 ```bash
 python -m ov_asr_speed -m hlevring/ov-whisper_small-int8-2026.0.0 --audio demoB108s.wav -d cpu
+```
+
+Whisper Large V3 Turbo Int8:
+
+```bash
+python -m ov_asr_speed -m hlevring/ov-whisper_large_v3_turbo-int8-2026.0.0 --audio demoB108s.wav -d cpu
 ```
 
 Run it a second time for a warm-cache comparison — the model is downloaded on
