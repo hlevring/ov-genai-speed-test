@@ -2,6 +2,10 @@
 
 Benchmark Whisper transcription speed using OpenVINO GenAI.
 
+## Prerequisites
+
+- **Python 3.10+** 
+
 ## Setup
 
 Clone the repository:
