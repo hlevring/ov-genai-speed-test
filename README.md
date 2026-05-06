@@ -4,7 +4,14 @@ Benchmark Whisper transcription speed using OpenVINO GenAI.
 
 ## Setup
 
-Create a virtual environment and install dependencies:
+Clone the repository:
+
+```bash
+git clone https://github.com/hlevring/ov-genai-speed-test.git
+cd ov-genai-speed-test
+```
+
+Create a virtual environment:
 
 ```bash
 python -m venv .venv
