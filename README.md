@@ -14,7 +14,11 @@ cd ov-genai-speed-test
 Create a virtual environment:
 
 ```bash
+# Windows
 python -m venv .venv
+
+# Linux / macOS
+python3 -m venv .venv
 ```
 
 Activate the environment:
@@ -35,7 +39,7 @@ pip install -r requirements.txt
 
 ## Usage
 
-Run the benchmark:
+Make sure the virtual environment is activated, then run the benchmark:
 
 ```bash
 python -m ov_asr_speed -m hlevring/ov-whisper_small-int8-2026.0.0 --audio demoB108s.wav -d cpu
