@@ -2,6 +2,8 @@
 
 import argparse
 import os
+import platform
+import re
 import sys
 import time
 
@@ -19,26 +21,35 @@ def resolve_model(model: str) -> str:
     return snapshot_download(repo_id=model)
 
 
-def validate_device(device: str) -> None:
-    """Ensure GPU/NPU is an Intel device. CPU is always accepted."""
-    if device == "CPU":
-        return
+def sanitize_filename(name: str) -> str:
+    """Turn a device full name into a safe filename stem."""
+    name = re.sub(r"\(R\)|\(TM\)|\(r\)|\(tm\)", "", name)
+    name = re.sub(r"[^\w\-]", "_", name)
+    name = re.sub(r"_+", "_", name).strip("_")
+    return name
 
+
+def get_device_name(device: str) -> str:
+    """Validate device and return its full name from OpenVINO."""
     import openvino as ov
 
     core = ov.Core()
-    available = core.available_devices
-    if device not in available:
-        sys.exit(
-            f"Device {device} is not available. "
-            f"Available devices: {', '.join(available)}"
-        )
 
-    full_name = core.get_property(device, "FULL_DEVICE_NAME")
-    if "intel" not in full_name.lower():
-        sys.exit(f"Device {device} is not Intel: {full_name}")
+    if device != "CPU":
+        available = core.available_devices
+        if device not in available:
+            sys.exit(
+                f"Device {device} is not available. "
+                f"Available devices: {', '.join(available)}"
+            )
+        full_name = core.get_property(device, "FULL_DEVICE_NAME")
+        if "intel" not in full_name.lower():
+            sys.exit(f"Device {device} is not Intel: {full_name}")
+    else:
+        full_name = core.get_property("CPU", "FULL_DEVICE_NAME")
 
     print(f"Device {device}: {full_name}")
+    return full_name
 
 
 def load_audio(path: str) -> tuple[np.ndarray, float]:
@@ -111,7 +122,7 @@ def main() -> None:
     device = args.device.upper()
 
     # --- Validate device --------------------------------------------------
-    validate_device(device)
+    device_full_name = get_device_name(device)
 
     # --- Resolve model path -----------------------------------------------
     model_path = resolve_model(args.model)
@@ -146,22 +157,45 @@ def main() -> None:
     elif hasattr(result, "text"):
         text = result.text.strip() if result.text else ""
 
+    cmdline = " ".join(sys.argv)
+    preview = text[:200] + ("…" if len(text) > 200 else "")
+
+    lines = [
+        "=" * 60,
+        f"{'Command:':<18}{cmdline}",
+        f"{'Platform:':<18}{platform.platform()}",
+        f"{'Device:':<18}{device} ({device_full_name})",
+        f"{'Model:':<18}{model_label}",
+        f"{'Audio:':<18}{os.path.basename(args.audio)} ({duration_s:.1f}s)",
+        "",
+        f"{'Load+compile:':<18}{load_ms:>8.0f} ms",
+        f"{'Inference:':<18}{inference_ms:>8.0f} ms  ({realtime_factor:.1f}x realtime)",
+        f"{'Total:':<18}{total_ms:>8.0f} ms",
+        "",
+        "Transcript (first 200 chars):",
+        f'  "{preview}"',
+        "=" * 60,
+    ]
+    report = "\n".join(lines)
+
     print()
-    print("=" * 60)
-    print(f"{'Model:':<18}{model_label}")
-    print(f"{'Device:':<18}{device}")
-    print(f"{'Audio:':<18}{os.path.basename(args.audio)} ({duration_s:.1f}s)")
-    print()
-    print(f"{'Load+compile:':<18}{load_ms:>8.0f} ms")
-    print(f"{'Inference:':<18}{inference_ms:>8.0f} ms  ({realtime_factor:.1f}x realtime)")
-    print(f"{'Total:':<18}{total_ms:>8.0f} ms")
-    print()
-    preview = text[:200]
-    if len(text) > 200:
-        preview += "…"
-    print(f"Transcript (first 200 chars):")
-    print(f'  "{preview}"')
-    print("=" * 60)
+    print(report)
+
+    # --- Save to file ------------------------------------------------------
+    results_dir = os.path.join(os.path.dirname(__file__), "results")
+    os.makedirs(results_dir, exist_ok=True)
+
+    stem = f"{device}_{sanitize_filename(device_full_name)}"
+    result_path = os.path.join(results_dir, f"{stem}.txt")
+    counter = 2
+    while os.path.exists(result_path):
+        result_path = os.path.join(results_dir, f"{stem}_{counter}.txt")
+        counter += 1
+
+    with open(result_path, "w", encoding="utf-8") as f:
+        f.write(report + "\n")
+
+    print(f"\nResult saved to {result_path}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,14 @@
+============================================================
+Command:          C:\git\ov-genai-speed-test\ov_asr_speed.py -m hlevring/ov-whisper_small-int8-2026.0.0 --audio demoB108s.wav -d cpu
+Platform:         Windows-10-10.0.26200-SP0
+Device:           CPU (Intel(R) Core(TM) Ultra 7 255H)
+Model:            hlevring/ov-whisper_small-int8-2026.0.0
+Audio:            demoB108s.wav (108.6s)
+
+Load+compile:          922 ms
+Inference:            4183 ms  (26.0x realtime)
+Total:                5105 ms
+
+Transcript (first 200 chars):
+  "Intel is revolutionising the computing landscape with AI built into the new generations of PCs. These AI PCs are designed to supercharge speed, efficiency, privacy and security making AI accessible to…"
+============================================================
