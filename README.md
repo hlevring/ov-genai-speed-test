@@ -35,10 +35,16 @@ Activate the environment:
 source .venv/bin/activate
 ```
 
-Install dependencies:
+Install dependencies (latest stable release):
 
 ```bash
 pip install -r requirements.txt
+```
+
+Or install with nightly OpenVINO builds:
+
+```bash
+pip install -r requirements_nightly.txt
 ```
 
 ## Usage
@@ -67,12 +73,12 @@ steady-state performance.
 |---|---|---|---|
 | `--model` | `-m` | yes | Local model directory **or** HuggingFace repo ID |
 | `--audio` | `-a` | yes | Path to a WAV audio file |
-| `--device` | `-d` | yes | `cpu`, `gpu`, or `npu` |
+| `--device` | `-d` | yes | `CPU`, `GPU`, `GPU.0`, `NPU`, etc. |
 | `--cache_dir` | | no | OpenVINO compilation cache directory |
+| `--static` | | no | Use `STATIC_PIPELINE` (required for openvino-genai <= 2026.1, not required with latest nightly) |
 
 ### Notes
 
 - GPU and NPU require an Intel device; CPU accepts any vendor.
-- NPU automatically enables `STATIC_PIPELINE`.
 - If `--model` is not a local directory, the script downloads it via `huggingface_hub.snapshot_download()`.
 - `--cache_dir` with CPU is expected to crash due to [openvinotoolkit/openvino#35379](https://github.com/openvinotoolkit/openvino/issues/35379). Use it only with GPU or NPU.

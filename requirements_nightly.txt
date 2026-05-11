@@ -1,0 +1,7 @@
+--extra-index-url https://storage.openvinotoolkit.org/simple/wheels/nightly
+--pre
+openvino-genai>=2026.1
+openvino>=2026.1
+librosa
+huggingface-hub
+numpy

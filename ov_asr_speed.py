@@ -61,7 +61,8 @@ def load_audio(path: str) -> tuple[np.ndarray, float]:
     return samples, duration_s
 
 
-def build_pipeline(model_path: str, device: str, cache_dir: str | None):
+def build_pipeline(model_path: str, device: str, cache_dir: str | None,
+                   static: bool = False):
     """Construct the WhisperPipeline and return (pipe, load_ms)."""
     import openvino_genai as ov_genai
 
@@ -71,7 +72,7 @@ def build_pipeline(model_path: str, device: str, cache_dir: str | None):
             print("WARNING: CACHE_DIR on CPU may crash — "
                   "see https://github.com/openvinotoolkit/openvino/issues/35379")
         props["CACHE_DIR"] = cache_dir
-    if device == "NPU":
+    if static:
         props["STATIC_PIPELINE"] = True
 
     t0 = time.perf_counter()
@@ -110,12 +111,15 @@ def main() -> None:
     )
     parser.add_argument(
         "--device", "-d", required=True,
-        choices=["cpu", "gpu", "npu", "CPU", "GPU", "NPU"],
-        help="Inference device: cpu, gpu, or npu",
+        help="Inference device: CPU, GPU, GPU.0, GPU.1, NPU, etc.",
     )
     parser.add_argument(
         "--cache_dir", default=None,
         help="OpenVINO compilation cache directory",
+    )
+    parser.add_argument(
+        "--static", action="store_true",
+        help="Use STATIC_PIPELINE (required for openvino-genai <= 2026.1, not required with latest nightly)",
     )
     args = parser.parse_args()
 
@@ -140,7 +144,7 @@ def main() -> None:
 
     # --- Build pipeline (load + compile) -----------------------------------
     print(f"Loading model on {device} …")
-    pipe, load_ms = build_pipeline(model_path, device, args.cache_dir)
+    pipe, load_ms = build_pipeline(model_path, device, args.cache_dir, args.static)
     print(f"Model loaded in {load_ms:.0f} ms")
 
     # --- Timed inference ---------------------------------------------------
