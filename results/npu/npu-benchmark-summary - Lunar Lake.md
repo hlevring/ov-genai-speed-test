@@ -8,7 +8,7 @@
 | **Models**          | https://huggingface.co/hlevring/ov-whisper_small-int8-2026.0.0, https://huggingface.co/hlevring/ov-whisper_large_v3_turbo-int8-2026.0.0 |
 | **Test script**     | https://github.com/hlevring/ov-genai-speed-test                                                                                         |
 | **Platform**        | Windows 11 (10.0.26200)                                                                                     |
-| **Processor**       | Intel Core Ultra 9 288V (from benchmark result filename stem / CPU device name)                             |
+| **Processor**       | Intel Core Ultra 9 288V                                                                                      |
 | **NPU**             | Intel(R) AI Boost                                                                                           |
 | **OpenVINO**        | `2026.2.0.dev20260511`                                                                                      |
 | **OpenVINO GenAI**  | `2026.2.0.0.dev20260511` (nightly wheels)                                                                    |
