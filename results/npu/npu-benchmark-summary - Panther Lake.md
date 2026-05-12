@@ -28,7 +28,7 @@ python -m ov_asr_speed --model hlevring/ov-whisper_small-int8-2026.0.0 --audio d
 
 | Run        | Load+Compile | Inference | Realtime Factor | Total      |
 | ---------- | ------------ | --------- | --------------- | ---------- |
-| Cold cache | 103,617 ms   | 9,788 ms  | 11.1x           | 113,405 ms |
+| Cold cache | 76,945 ms    | 9,355 ms  | 11.6x           | 86,301 ms  |
 | Warm cache | 1,806 ms     | 9,466 ms  | 11.5x           | 11,272 ms  |
 
 
