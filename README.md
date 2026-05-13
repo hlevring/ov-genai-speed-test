@@ -73,12 +73,18 @@ steady-state performance.
 |---|---|---|---|
 | `--model` | `-m` | yes | Local model directory **or** HuggingFace repo ID |
 | `--audio` | `-a` | yes | Path to a WAV audio file |
-| `--device` | `-d` | yes | `CPU`, `GPU`, `GPU.0`, `NPU`, etc. |
+| `--device` | `-d` | yes | `CPU`, `GPU`, `GPU.0`, `GPU.1`, `NPU`, etc. (`GPU` resolves to first Intel GPU) |
 | `--cache_dir` | | no | OpenVINO compilation cache directory |
 | `--static` | | no | Use `STATIC_PIPELINE` (required for openvino-genai <= 2026.1, not required with latest nightly) |
+| `--weight-less-caching` | `-wl` | no | Set `CACHE_MODE=OPTIMIZE_SIZE` for compilation cache (plugin-dependent support) |
 
 ### Notes
 
-- GPU and NPU require an Intel device; CPU accepts any vendor.
+- `GPU` is treated as an Intel-only alias and resolves to the first Intel GPU device (for example `GPU.1`).
+- `GPU.0` / `GPU.1` remain supported, but must refer to an Intel GPU.
+- If no Intel GPU is available for `GPU`, the script exits with a clear error.
+- NPU requires an Intel device; CPU accepts any vendor.
 - If `--model` is not a local directory, the script downloads it via `huggingface_hub.snapshot_download()`.
 - `--cache_dir` with CPU is expected to crash due to [openvinotoolkit/openvino#35379](https://github.com/openvinotoolkit/openvino/issues/35379). Use it only with GPU or NPU.
+- `--weight-less-caching/-wl` requires `--cache_dir`.
+- `--weight-less-caching/-wl` is accepted for all devices, but whether `CACHE_MODE` is supported depends on the active plugin/build.

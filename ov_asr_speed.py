@@ -56,28 +56,54 @@ def result_filename_stem(device: str, device_full_name: str,
     return f"{prefix}_{short_device_name(device_full_name)}_{short_model_name(model_arg)}"
 
 
-def get_device_name(device: str) -> tuple[str, str]:
-    """Validate device and return (device_full_name, cpu_full_name)."""
+def get_device_name(device: str) -> tuple[str, str, str]:
+    """Validate/resolve device and return (resolved_device, device_full_name, cpu_full_name)."""
     import openvino as ov
 
     core = ov.Core()
     cpu_full_name = core.get_property("CPU", "FULL_DEVICE_NAME")
+    available = core.available_devices
 
-    if device != "CPU":
-        available = core.available_devices
+    if device == "GPU":
+        gpu_devices = [d for d in available if d.upper().startswith("GPU")]
+        intel_gpu_devices: list[tuple[str, str]] = []
+        for gpu_dev in gpu_devices:
+            gpu_full_name = core.get_property(gpu_dev, "FULL_DEVICE_NAME")
+            if "intel" in gpu_full_name.lower():
+                intel_gpu_devices.append((gpu_dev, gpu_full_name))
+
+        if not intel_gpu_devices:
+            gpu_listing: list[str] = []
+            for gpu_dev in gpu_devices:
+                gpu_full_name = core.get_property(gpu_dev, "FULL_DEVICE_NAME")
+                gpu_listing.append(f"{gpu_dev} ({gpu_full_name})")
+            listing = ", ".join(gpu_listing) if gpu_listing else "none"
+            sys.exit(
+                "Device GPU requested, but no Intel GPU was found. "
+                f"Available GPU devices: {listing}"
+            )
+
+        resolved_device, full_name = intel_gpu_devices[0]
+        if resolved_device != device:
+            print(f"Resolved device alias {device} -> {resolved_device}")
+    elif device != "CPU":
         if device not in available:
             sys.exit(
                 f"Device {device} is not available. "
                 f"Available devices: {', '.join(available)}"
             )
+        resolved_device = device
         full_name = core.get_property(device, "FULL_DEVICE_NAME")
-        if "intel" not in full_name.lower():
+        if device.upper().startswith("GPU") and "intel" not in full_name.lower():
+            sys.exit(f"Device {device} is not an Intel GPU: {full_name}")
+        if not device.upper().startswith("GPU") and "intel" not in full_name.lower():
             sys.exit(f"Device {device} is not Intel: {full_name}")
     else:
+        resolved_device = device
         full_name = cpu_full_name
 
-    print(f"Device {device}: {full_name}")
-    return full_name, cpu_full_name
+    print(f"Device {resolved_device}: {full_name}")
+    return resolved_device, full_name, cpu_full_name
 
 
 def load_audio(path: str) -> tuple[np.ndarray, float]:
@@ -90,7 +116,8 @@ def load_audio(path: str) -> tuple[np.ndarray, float]:
 
 
 def build_pipeline(model_path: str, device: str, cache_dir: str | None,
-                   static: bool = False, word_timestamps: bool = False):
+                   static: bool = False, word_timestamps: bool = False,
+                   weight_less_caching: bool = False):
     """Construct the WhisperPipeline and return (pipe, load_ms)."""
     import openvino_genai as ov_genai
 
@@ -100,6 +127,8 @@ def build_pipeline(model_path: str, device: str, cache_dir: str | None,
             print("WARNING: CACHE_DIR on CPU may crash — "
                   "see https://github.com/openvinotoolkit/openvino/issues/35379")
         props["CACHE_DIR"] = cache_dir
+    if weight_less_caching:
+        props["CACHE_MODE"] = "OPTIMIZE_SIZE"
     if static:
         props["STATIC_PIPELINE"] = True
 
@@ -108,7 +137,16 @@ def build_pipeline(model_path: str, device: str, cache_dir: str | None,
         kwargs["word_timestamps"] = True
 
     t0 = time.perf_counter()
-    pipe = ov_genai.WhisperPipeline(model_path, device, **kwargs, **props)
+    try:
+        pipe = ov_genai.WhisperPipeline(model_path, device, **kwargs, **props)
+    except RuntimeError as exc:
+        if weight_less_caching and "CACHE_MODE" in str(exc):
+            sys.exit(
+                f"Weightless caching (-wl) requested, but CACHE_MODE is not "
+                f"supported by device/plugin '{device}' in this OpenVINO build.\n"
+                f"Original error: {exc}"
+            )
+        raise
     load_ms = (time.perf_counter() - t0) * 1000
 
     return pipe, load_ms
@@ -166,6 +204,10 @@ def main() -> None:
         help="Enable word-level timestamps in transcription output",
     )
     parser.add_argument(
+        "--weight-less-caching", "-wl", action="store_true",
+        help="Enable CACHE_MODE=OPTIMIZE_SIZE (device/plugin support varies)",
+    )
+    parser.add_argument(
         "--initial_prompt", default=None,
         help="Initial prompt added to context of the first window",
     )
@@ -175,10 +217,10 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    device = args.device.upper()
+    requested_device = args.device.upper()
 
     # --- Validate device --------------------------------------------------
-    device_full_name, cpu_full_name = get_device_name(device)
+    device, device_full_name, cpu_full_name = get_device_name(requested_device)
 
     # --- Resolve model path -----------------------------------------------
     model_path = resolve_model(args.model)
@@ -195,9 +237,15 @@ def main() -> None:
     print(f"Audio loaded: {duration_s:.1f}s ({audio_load_ms:.0f} ms)")
 
     # --- Build pipeline (load + compile) -----------------------------------
+    if args.weight_less_caching and not args.cache_dir:
+        sys.exit("--weight-less-caching/-wl requires --cache_dir")
+
+    if args.weight_less_caching:
+        print(f"Weightless caching enabled on {device} (CACHE_MODE=OPTIMIZE_SIZE)")
+
     print(f"Loading model on {device} …")
     pipe, load_ms = build_pipeline(model_path, device, args.cache_dir, args.static,
-                                    args.word_timestamps)
+                                    args.word_timestamps, args.weight_less_caching)
     print(f"Model loaded in {load_ms:.0f} ms")
 
     # --- Timed inference ---------------------------------------------------
@@ -235,7 +283,7 @@ def main() -> None:
         "=" * 60,
         f"{'Command:':<18}{cmdline}",
         f"{'Platform:':<18}{platform.platform()}",
-        f"{'Device:':<18}{device} ({device_full_name})",
+        f"{'Device:':<18}{requested_device if requested_device == device else f'{requested_device} -> {device}'} ({device_full_name})",
         f"{'Model:':<18}{model_label}",
         f"{'Audio:':<18}{os.path.basename(args.audio)} ({duration_s:.1f}s)",
     ]
