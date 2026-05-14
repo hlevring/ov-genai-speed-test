@@ -117,7 +117,8 @@ def load_audio(path: str) -> tuple[np.ndarray, float]:
 
 def build_pipeline(model_path: str, device: str, cache_dir: str | None,
                    static: bool = False, word_timestamps: bool = False,
-                   weight_less_caching: bool = False):
+                   weight_less_caching: bool = False,
+                   force_plugin_npu_compiler: bool = False):
     """Construct the WhisperPipeline and return (pipe, load_ms)."""
     import openvino_genai as ov_genai
 
@@ -129,6 +130,8 @@ def build_pipeline(model_path: str, device: str, cache_dir: str | None,
         props["CACHE_DIR"] = cache_dir
     if weight_less_caching:
         props["CACHE_MODE"] = "OPTIMIZE_SIZE"
+    if force_plugin_npu_compiler and device.split(".")[0] == "NPU":
+        props["NPU_COMPILER_TYPE"] = "PLUGIN"
     if static:
         props["STATIC_PIPELINE"] = True
 
@@ -208,6 +211,10 @@ def main() -> None:
         help="Enable CACHE_MODE=OPTIMIZE_SIZE (device/plugin support varies)",
     )
     parser.add_argument(
+        "--force-plugin-npu-compiler", "-fpc", action="store_true",
+        help="Force NPU_COMPILER_TYPE=PLUGIN on NPU (independent of -wl)",
+    )
+    parser.add_argument(
         "--initial_prompt", default=None,
         help="Initial prompt added to context of the first window",
     )
@@ -221,6 +228,18 @@ def main() -> None:
 
     # --- Validate device --------------------------------------------------
     device, device_full_name, cpu_full_name = get_device_name(requested_device)
+    if args.force_plugin_npu_compiler and device.split(".")[0] != "NPU":
+        sys.exit("--force-plugin-npu-compiler/-fpc can only be used with NPU")
+    if args.force_plugin_npu_compiler:
+        print("Forcing NPU compiler type to PLUGIN (NPU_COMPILER_TYPE=PLUGIN).")
+        print("This should always work on NPU driver >= 2565 according to "
+              "https://github.com/openvinotoolkit/openvino/blob/master/src/plugins/intel_npu/README.md#ovintel_npucompiler_type")
+        try:
+            import openvino as ov
+            npu_driver_version = ov.Core().get_property(device, "NPU_DRIVER_VERSION")
+            print(f"Detected NPU driver version: {npu_driver_version}")
+        except Exception as exc:
+            print(f"Detected NPU driver version: <unavailable: {exc}>")
 
     # --- Resolve model path -----------------------------------------------
     model_path = resolve_model(args.model)
@@ -245,7 +264,8 @@ def main() -> None:
 
     print(f"Loading model on {device} …")
     pipe, load_ms = build_pipeline(model_path, device, args.cache_dir, args.static,
-                                    args.word_timestamps, args.weight_less_caching)
+                                    args.word_timestamps, args.weight_less_caching,
+                                    args.force_plugin_npu_compiler)
     print(f"Model loaded in {load_ms:.0f} ms")
 
     # --- Timed inference ---------------------------------------------------

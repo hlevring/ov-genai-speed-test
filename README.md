@@ -63,6 +63,19 @@ Whisper Large V3 Turbo Int8:
 python -m ov_asr_speed -m hlevring/ov-whisper_large_v3_turbo-int8-2026.0.0 --audio demoB108s.wav -d cpu
 ```
 
+NPU compiler experiments (`-fpc` is independent of `-wl`):
+
+```bash
+# Force plugin compiler only
+python -m ov_asr_speed -m hlevring/ov-whisper_small-int8-2026.0.0 --audio demoB108s.wav -d NPU -fpc
+
+# Weightless caching only
+python -m ov_asr_speed -m hlevring/ov-whisper_small-int8-2026.0.0 --audio demoB108s.wav -d NPU --cache_dir cache -wl
+
+# Combined: weightless caching + force plugin compiler
+python -m ov_asr_speed -m hlevring/ov-whisper_small-int8-2026.0.0 --audio demoB108s.wav -d NPU --cache_dir cache -wl -fpc
+```
+
 Run it a second time for a warm-cache comparison — the model is downloaded on
 the first run and cached by HuggingFace, so the second run reflects
 steady-state performance.
@@ -77,6 +90,7 @@ steady-state performance.
 | `--cache_dir` | | no | OpenVINO compilation cache directory |
 | `--static` | | no | Use `STATIC_PIPELINE` (required for openvino-genai <= 2026.1, not required with latest nightly) |
 | `--weight-less-caching` | `-wl` | no | Set `CACHE_MODE=OPTIMIZE_SIZE` for compilation cache (plugin-dependent support) |
+| `--force-plugin-npu-compiler` | `-fpc` | no | Force `NPU_COMPILER_TYPE=PLUGIN` (NPU only, independent of `-wl`) |
 
 ### Notes
 
@@ -88,6 +102,8 @@ steady-state performance.
 - `--cache_dir` with CPU is expected to crash due to [openvinotoolkit/openvino#35379](https://github.com/openvinotoolkit/openvino/issues/35379). Use it only with GPU or NPU.
 - `--weight-less-caching/-wl` requires `--cache_dir`.
 - `--weight-less-caching/-wl` is accepted for all devices, but whether `CACHE_MODE` is supported depends on the active plugin/build.
+- `--force-plugin-npu-compiler/-fpc` is NPU-only and independent of `-wl`.
+- On 3720-class platforms, forcing plugin compiler can be incompatible with older NPU drivers.
 
 ## NPU Probe
 
