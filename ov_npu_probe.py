@@ -13,6 +13,17 @@ from pathlib import Path
 from ctypes import wintypes
 
 
+def resolve_model(model: str) -> str:
+    """Return a local model directory, downloading from HuggingFace if needed."""
+    if os.path.isdir(model):
+        return model
+
+    from huggingface_hub import snapshot_download
+
+    print(f"Model not found locally - downloading {model} from HuggingFace ...")
+    return snapshot_download(repo_id=model)
+
+
 def _safe_dist_version(dist_name: str) -> str:
     try:
         return importlib_metadata.version(dist_name)
@@ -113,20 +124,16 @@ class ProbeResult:
     error_text: str = ""
 
 
-def probe_cache_mode(core, device: str, cache_dir: str | None, cache_mode: str) -> ProbeResult:
-    import openvino as ov
+def probe_cache_mode(model_path: str, device: str, cache_dir: str | None, cache_mode: str) -> ProbeResult:
+    import openvino_genai as ov_genai
 
-    # Minimal single-op model to test compile-time option acceptance.
-    param = ov.opset13.parameter([1, 80, 16], ov.Type.f32, name="x")
-    relu = ov.opset13.relu(param)
-    model = ov.Model([relu], [param], "cache_mode_probe")
-
+    kwargs: dict[str, str] = {}
     config: dict[str, str] = {"CACHE_MODE": cache_mode}
     if cache_dir:
         config["CACHE_DIR"] = cache_dir
 
     try:
-        core.compile_model(model, device, config)
+        ov_genai.WhisperPipeline(model_path, device, **kwargs, **config)
         return ProbeResult(success=True, classification="accepted")
     except Exception as exc:  # pylint: disable=broad-except
         text = str(exc)
@@ -134,6 +141,12 @@ def probe_cache_mode(core, device: str, cache_dir: str | None, cache_mode: str) 
             return ProbeResult(
                 success=False,
                 classification="unsupported_option",
+                error_text=text,
+            )
+        if "WeightlessCacheAttribute" in text:
+            return ProbeResult(
+                success=False,
+                classification="weightless_attribute_missing",
                 error_text=text,
             )
         return ProbeResult(
@@ -165,6 +178,11 @@ def parse_args() -> argparse.Namespace:
         "--cache_mode",
         default="OPTIMIZE_SIZE",
         help="CACHE_MODE value to probe (default: OPTIMIZE_SIZE)",
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="Local model directory or HuggingFace repo id for active CACHE_MODE probe",
     )
     return parser.parse_args()
 
@@ -340,6 +358,18 @@ def main() -> int:
 
     print_runtime_details(core, device)
 
+    if not args.model:
+        print()
+        print("No model provided; skipping CACHE_MODE probe and DLL snapshot.")
+        return 0
+
+    try:
+        model_path = resolve_model(args.model)
+    except Exception as exc:
+        print()
+        print(f"Failed to resolve model '{args.model}': {exc}")
+        return 6
+
     try:
         cache_dir = ensure_cache_dir(args.cache_dir)
     except RuntimeError as exc:
@@ -349,9 +379,10 @@ def main() -> int:
 
     print()
     print("=== CACHE_MODE Probe ===")
+    print(f"Model: {model_path}")
     print(f"Requested CACHE_MODE: {args.cache_mode}")
     print(f"CACHE_DIR: {cache_dir if cache_dir else '<not set>'}")
-    result = probe_cache_mode(core, device, cache_dir, args.cache_mode)
+    result = probe_cache_mode(model_path, device, cache_dir, args.cache_mode)
 
     print(f"Result: {'SUCCESS' if result.success else 'FAIL'}")
     print(f"Classification: {result.classification}")
