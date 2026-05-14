@@ -120,7 +120,6 @@ def print_runtime_details(core, device: str) -> None:
 @dataclass
 class ProbeResult:
     success: bool
-    classification: str
     error_text: str = ""
 
 
@@ -134,26 +133,20 @@ def probe_cache_mode(model_path: str, device: str, cache_dir: str | None, cache_
 
     try:
         ov_genai.WhisperPipeline(model_path, device, **kwargs, **config)
-        return ProbeResult(success=True, classification="accepted")
+        return ProbeResult(success=True, error_text="")
     except Exception as exc:  # pylint: disable=broad-except
-        text = str(exc)
-        if "Option 'CACHE_MODE' is not supported" in text or "CACHE_MODE is not supported" in text:
-            return ProbeResult(
-                success=False,
-                classification="unsupported_option",
-                error_text=text,
-            )
-        if "WeightlessCacheAttribute" in text:
-            return ProbeResult(
-                success=False,
-                classification="weightless_attribute_missing",
-                error_text=text,
-            )
-        return ProbeResult(
-            success=False,
-            classification="other_error",
-            error_text=text,
-        )
+        return ProbeResult(success=False, error_text=str(exc))
+
+
+def is_gating_probe_error(error_text: str) -> bool:
+    if not error_text:
+        return False
+    gating_markers = (
+        "Option 'CACHE_MODE' is not supported",
+        "CACHE_MODE is not supported",
+        "WeightlessCacheAttribute",
+    )
+    return any(marker in error_text for marker in gating_markers)
 
 
 def parse_args() -> argparse.Namespace:
@@ -162,12 +155,6 @@ def parse_args() -> argparse.Namespace:
             "Print OpenVINO/OpenVINO GenAI versions and probe whether "
             "the selected device accepts CACHE_MODE."
         )
-    )
-    parser.add_argument(
-        "--device",
-        "-d",
-        default="NPU",
-        help="OpenVINO device string (default: NPU)",
     )
     parser.add_argument(
         "--cache_dir",
@@ -349,7 +336,7 @@ def main() -> int:
 
     core = ov.Core()
     print_device_inventory(core)
-    device = args.device.upper()
+    device = "NPU"
     if device not in core.available_devices:
         print()
         print(f"Requested device '{device}' is not available.")
@@ -385,16 +372,16 @@ def main() -> int:
     result = probe_cache_mode(model_path, device, cache_dir, args.cache_mode)
 
     print(f"Result: {'SUCCESS' if result.success else 'FAIL'}")
-    print(f"Classification: {result.classification}")
     if result.error_text:
         print("Error:")
         print(result.error_text)
 
-    # Enumerate loaded modules after runtime init and probe call to capture delayed loads.
-    print_loaded_npu_dll_paths(core, device)
+    # Print DLL details only for useful-stage outcomes.
+    if result.success or not is_gating_probe_error(result.error_text):
+        # Enumerate loaded modules after runtime init and probe call to capture delayed loads.
+        print_loaded_npu_dll_paths(core, device)
 
-    # Keep unsupported-option as informative outcome for diagnostics.
-    if result.classification == "unsupported_option":
+    if not result.success and is_gating_probe_error(result.error_text):
         return 0
     return 0 if result.success else 4
 

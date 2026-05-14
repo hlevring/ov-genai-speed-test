@@ -88,3 +88,36 @@ steady-state performance.
 - `--cache_dir` with CPU is expected to crash due to [openvinotoolkit/openvino#35379](https://github.com/openvinotoolkit/openvino/issues/35379). Use it only with GPU or NPU.
 - `--weight-less-caching/-wl` requires `--cache_dir`.
 - `--weight-less-caching/-wl` is accepted for all devices, but whether `CACHE_MODE` is supported depends on the active plugin/build.
+
+## NPU Probe
+
+Use `ov_npu_probe.py` to inspect your NPU runtime stack and optionally test
+`CACHE_MODE` behavior.
+
+### Prerequisite (nightly)
+
+Install nightly OpenVINO dependencies before running the probe:
+
+```bash
+pip install -r requirements_nightly.txt
+```
+
+### Commands
+
+Info-only mode (no model compile):
+
+```bash
+python ov_npu_probe.py
+```
+
+Active probe mode (loads model and tests `CACHE_MODE`):
+
+```bash
+python ov_npu_probe.py --cache_dir cache --cache_mode OPTIMIZE_SIZE --model hlevring/ov-whisper_small-int8-2026.0.0
+```
+
+### Notes
+
+- Without `--model`, the probe prints environment, package versions, device inventory, and OpenVINO runtime details.
+- With `--model`, the probe runs a `CACHE_MODE` compile test and prints the raw exception on failure.
+- `=== Loaded NPU DLLs ===` is printed only for useful-stage probe outcomes.
